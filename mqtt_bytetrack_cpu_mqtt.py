@@ -19,6 +19,7 @@ from typing import Dict, Tuple, Optional
 import numpy as np
 import paho.mqtt.client as mqtt
 from boxmot import ByteTrack
+from boxmot.trackers.bytetrack.bytetrack import STrack
 
 # ────────────────────────────  PARAMETERS  ──────────────────────────── #
 SKIP_AHEAD    = 3      # how many later frames must arrive before we skip a hole
@@ -80,7 +81,9 @@ def on_message(client, userdata, msg):
         reset_now = (seq == 1 or seq == 0)
         if reset_now:
             print("[RESET] frame_id 0 received – clearing buffers & restarting tracker")
+
             tracker = ByteTrack()
+            STrack.clear_count()  # reset track ID counter
             with buffer_lock:
                 dets_buffer.clear()
                 next_seq = None
@@ -151,7 +154,7 @@ def process_tracking(frame_id: str, dets: np.ndarray, out_topic: str):
     dummy_frame = np.zeros((1, 1, 3), np.uint8)  # ByteTrack requires an image
     tracklets = tracker.update(dets, dummy_frame)
 
-    # print(f"publish {frame_id}")
+    print(f"trackid={[int(t[4]) for t in tracklets]}")
 
     mqtt_client.publish(out_topic, json.dumps({
         "frame_id": frame_id,

@@ -1,6 +1,10 @@
 # Base image: Nvidia PyTorch https://ngc.nvidia.com/catalog/containers/nvidia:pytorch
 FROM python:3.9-slim
 
+ENV BROKER_URL="mqtt://192.168.200.206:1883" \
+    IN_TOPIC="cam1/pose/bboxes" \
+    IN_TOPIC="bytetrack/tracks" 
+    
 # Update and install necessary packages
 RUN apt update && apt install -y git
 
