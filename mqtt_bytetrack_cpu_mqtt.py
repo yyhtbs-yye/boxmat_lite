@@ -29,11 +29,10 @@ FRAME_ID_RE   = re.compile(r"(\D*)(\d+)$")  # prefix + numeric suffix extractor
 
 def parse_args():
     p = argparse.ArgumentParser("ByteTrack MQTT bridge with ordered buffering")
-    p.add_argument("--broker",    default=os.getenv("BROKER_URL", "mqtt://127.0.0.1:1883"))
+    p.add_argument("--broker",    default=os.getenv("BROKER_URL", "mqtt://192.168.200.206:1883"))
     p.add_argument("--in_topic",  default=os.getenv("IN_TOPIC",   "cam1/pose/bboxes"))
     p.add_argument("--out_topic", default=os.getenv("OUT_TOPIC",  "bytetrack/tracks"))
     return p.parse_args()
-
 
 # Buffer keyed by *integer* frame number  →  (dets_array, t_arrived, original_id)
 # Guarded by `buffer_lock` for thread-safety inside the MQTT callback.
@@ -77,13 +76,15 @@ def on_message(client, userdata, msg):
         fid = payload.get("frame_id", "")
         prefix, seq = split_frame_id(fid)
 
-        # ——— Handle RESET when frame 0 arrives ———————————————————— #
-        if seq == 0:
-            print("[RESET] Received frame_id 0 - resetting tracker and buffers")
-            tracker = ByteTrack()          # fresh state, track IDs restart
+        # ——— Reset logic ———
+        reset_now = (seq == 1 or seq == 0)
+        if reset_now:
+            print("[RESET] frame_id 0 received – clearing buffers & restarting tracker")
+            tracker = ByteTrack()
             with buffer_lock:
                 dets_buffer.clear()
-                next_seq = 0               # start sequence anew at 0
+                next_seq = None
+
         # ———————————————————————————————————————————————— #
 
         scale  = float(payload.get("scale", 1.0))
@@ -149,6 +150,8 @@ def pump_buffer(prefix: str, width: int, out_topic: str):
 def process_tracking(frame_id: str, dets: np.ndarray, out_topic: str):
     dummy_frame = np.zeros((1, 1, 3), np.uint8)  # ByteTrack requires an image
     tracklets = tracker.update(dets, dummy_frame)
+
+    # print(f"publish {frame_id}")
 
     mqtt_client.publish(out_topic, json.dumps({
         "frame_id": frame_id,
