@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["boxmot", "tracking"]
+exclude = ["output"]
+
+[tool.flake8]
+max-line-length = 120
+exclude = [".tox", "*.egg", "build", "temp"]
+select = ["E", "W", "F"]
+doctests = true
+verbose = 2
+format = "pylint"
+ignore = ["E731", "F405", "E402", "W504", "W605", "E741"]
+
+[project]
+authors = [
+    {name = "Mikel Broström"},
+]
+license = {text = "AGPL-3.0-or-later"}
+requires-python = ">=3.9.21,<=3.9.21"
+
+
+name = "boxmot"
+version = "13.0.0"
+description = "BoxMOT: pluggable SOTA tracking modules for segmentation, object detection and pose estimation models"
+readme = "README.md"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+keywords = [
+    "tracking",
+    "tracking-by-detection",
+    "machine-learning",
+    "deep-learning",
+    "vision",
+    "ML",
+    "DL",
+    "AI",
+    "YOLO",
+]
