@@ -154,8 +154,6 @@ def process_tracking(frame_id: str, dets: np.ndarray, out_topic: str):
     dummy_frame = np.zeros((1, 1, 3), np.uint8)  # ByteTrack requires an image
     tracklets = tracker.update(dets, dummy_frame)
 
-    print(f"trackid={[int(t[4]) for t in tracklets]}")
-
     mqtt_client.publish(out_topic, json.dumps({
         "frame_id": frame_id,
         "track_ids":   [int(t[4]) for t in tracklets],
