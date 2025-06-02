@@ -1,5 +1,5 @@
 # Base image: Nvidia PyTorch https://ngc.nvidia.com/catalog/containers/nvidia:pytorch
-FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-runtime
+FROM python:3.9-slim
 
 # Update and install necessary packages
 RUN apt update && apt install -y git
@@ -17,13 +17,9 @@ COPY mqtt_bytetrack_cpu_mqtt.py .
 
 CMD ["bash", "-lc", "\
     python mqtt_bytetrack_cpu_mqtt.py \
-      --rtsp_url \"${RTSP_URL}\" \
       --broker \"${BROKER_URL}\" \
       --in_topic \"${IN_TOPIC}\" \
       --out_topic \"${OUT_TOPIC}\" \
-      --backend \"${BACKEND}\" \
-      --queue_size \"${QUEUE_SIZE}\" \
-      --cuda_visible_devices \"${CUDA_VISIBLE_DEVICES}\" \
 "]
 
 
