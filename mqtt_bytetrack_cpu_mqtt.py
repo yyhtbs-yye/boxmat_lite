@@ -15,15 +15,9 @@ def parse_args():
                     "runs ByteTrack, and republishes track results over MQTT."
     )
     parser.add_argument(
-        "--mqtt_host",
-        default=os.getenv("MQTT_HOST", "192.168.200.206"),
-        help="MQTT broker hostname or IP"
-    )
-    parser.add_argument(
-        "--mqtt_port",
-        type=int,
-        default=int(os.getenv("MQTT_PORT", "1883")),
-        help="MQTT broker port"
+        '--broker',
+        default=os.getenv('BROKER_URL', 'mqtt://192.168.200.206:1883'),
+        help='MQTT broker URL (mqtt://host:port)'
     )
     parser.add_argument(
         "--in_topic",
@@ -155,6 +149,9 @@ def main():
 
     args = parse_args()
 
+    proto, rest = args.broker.split('://', 1)
+    host, port = rest.split(':')
+
     # Store topics in userdata so callbacks can access them
     userdata = {
         "in_topic": args.in_topic,
@@ -165,7 +162,7 @@ def main():
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
 
-    mqtt_client.connect(args.mqtt_host, args.mqtt_port, keepalive=60)
+    mqtt_client.connect(host, int(port), keepalive=60)
     mqtt_client.loop_start()
     print(f"[MAIN] MQTT loop started. Listening on '{args.in_topic}'…")
 

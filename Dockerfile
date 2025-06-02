@@ -8,15 +8,24 @@ RUN apt update && apt install -y git
 WORKDIR /app
 
 # Clone the repository with submodules into a subdirectory 'boxmot'
-RUN git clone https://github.com/mikel-brostrom/boxmot.git -b master boxmot
+RUN git clone https://github.com/yyhtbs-yye/boxmat_lite
 
-# Set the working directory to the cloned repository
-WORKDIR /usr/src/boxmot
+RUN cd boxmat_lite && pip install -r requirements.txt \
+    && pip install -e .
 
-# Install pip packages and Poetry dependencies
-RUN python3 -m pip install --upgrade pip poetry && \
-    poetry config virtualenvs.create false && \
-    poetry install --with yolo
+COPY mqtt_bytetrack_cpu_mqtt.py .
+
+CMD ["bash", "-lc", "\
+    python mqtt_bytetrack_cpu_mqtt.py \
+      --rtsp_url \"${RTSP_URL}\" \
+      --broker \"${BROKER_URL}\" \
+      --in_topic \"${IN_TOPIC}\" \
+      --out_topic \"${OUT_TOPIC}\" \
+      --backend \"${BACKEND}\" \
+      --queue_size \"${QUEUE_SIZE}\" \
+      --cuda_visible_devices \"${CUDA_VISIBLE_DEVICES}\" \
+"]
+
 
 # ------------------------------------------------------------------------------
 
