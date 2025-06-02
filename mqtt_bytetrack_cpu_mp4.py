@@ -2,21 +2,18 @@
 """
 Real-time MQTT-to-ByteTrack bridge **with ordered frame buffering**
 ——————————————————————————————————————————————————————————————
-Updates in this revision
-───────────────────────
-• **Track-ID reset on frame 0**
-  When a payload arrives whose numeric frame_id is 0 we:
-      - clear the frame buffer
-      - reset `next_seq`
-      - create a fresh `ByteTrack()` instance so new tracks start from ID 1 again
-  (This mirrors common camera pipelines that restart numbering with FRAME:000000.)
-
+Updates in this revision:
+• Save first 100 frames (1920×1080) with bounding‐boxes overlaid to output.mp4.
+  – Creates a cv2.VideoWriter the first time a frame is processed.
+  – Draws each tracklet’s bounding‐box onto a blank 1920×1080 image and writes it.
+  – Once 100 frames have been written, releases the writer and stops writing.
 Everything else is identical to the previously shared version.
 """
 import json, re, threading, time, os, argparse
 from typing import Dict, Tuple, Optional
 
 import numpy as np
+import cv2
 import paho.mqtt.client as mqtt
 from boxmot import ByteTrack
 
@@ -24,8 +21,14 @@ from boxmot import ByteTrack
 SKIP_AHEAD    = 3      # how many later frames must arrive before we skip a hole
 FRAME_TIMEOUT = 2.0    # seconds before we drop a never-arrived frame
 FRAME_ID_RE   = re.compile(r"(\D*)(\d+)$")  # prefix + numeric suffix extractor
-# ---------------------------------------------------------------------- #
 
+# Video‐writing parameters:
+VIDEO_FILENAME   = "output.mp4"
+IMAGE_WIDTH      = 1920
+IMAGE_HEIGHT     = 1080
+FPS              = 30              # frames per second for the output video
+MAX_FRAMES       = 100             # only save first 100 frames
+# ---------------------------------------------------------------------- #
 
 def parse_args():
     p = argparse.ArgumentParser("ByteTrack MQTT bridge with ordered buffering")
@@ -33,7 +36,6 @@ def parse_args():
     p.add_argument("--in_topic",  default=os.getenv("IN_TOPIC",   "cam1/pose/bboxes"))
     p.add_argument("--out_topic", default=os.getenv("OUT_TOPIC",  "bytetrack/tracks"))
     return p.parse_args()
-
 
 # Buffer keyed by *integer* frame number  →  (dets_array, t_arrived, original_id)
 # Guarded by `buffer_lock` for thread-safety inside the MQTT callback.
@@ -44,6 +46,10 @@ buffer_lock = threading.Lock()
 # ByteTrack instance (re-created whenever sequence restarts)
 tracker = ByteTrack()
 
+# Video‐writer globals:
+video_writer: Optional[cv2.VideoWriter] = None
+saved_frame_count = 0
+
 mqtt_client: mqtt.Client  # set later in main()
 
 # ─────────────────────────  HELPERS FOR IDS  ────────────────────────── #
@@ -52,15 +58,13 @@ def split_frame_id(fid: str) -> tuple[str,int]:
     ("FRAME", 123)  from  "FRAME:000123"
     """
 
-    splits = fid.split(':')
-    if len(splits) != 2:
+    out = fid.split(':')
+    if len(out) != 2:
         return "", -1 # invalid format, return empty prefix and zero ID
     prefix, frame_id_str = fid.split(':')
     return prefix, int(frame_id_str)
 
-
 # ─────────────────────────  MQTT CALLBACKS  ─────────────────────────── #
-
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print(f"[MQTT] Connected → subscribing '{userdata['in_topic']}'")
@@ -72,42 +76,37 @@ def on_message(client, userdata, msg):
     """MQTT message handler: parse, buffer, and trigger `pump_buffer()`."""
     global next_seq, tracker
 
-    try:
-        payload = json.loads(msg.payload.decode())
-        fid = payload.get("frame_id", "")
-        prefix, seq = split_frame_id(fid)
+    payload = json.loads(msg.payload.decode())
+    fid = payload.get("frame_id", "")
+    prefix, seq = split_frame_id(fid)
 
-        # ——— Handle RESET when frame 0 arrives ———————————————————— #
-        if seq == 0:
-            print("[RESET] Received frame_id 0 - resetting tracker and buffers")
-            tracker = ByteTrack()          # fresh state, track IDs restart
-            with buffer_lock:
-                dets_buffer.clear()
-                next_seq = 0               # start sequence anew at 0
-        # ———————————————————————————————————————————————— #
-
-        scale  = float(payload.get("scale", 1.0))
-        boxes  = payload.get("bboxes", [])
-        scores = payload.get("bboxe_scores", [])
-        dets = np.array(
-            [[x1/scale, y1/scale, x2/scale, y2/scale, s, 0]
-             for (x1, y1, x2, y2), s in zip(boxes, scores)],
-            dtype=np.float32
-        ) if boxes else np.zeros((0, 6), np.float32)
-
+    # ——— Handle RESET when frame 0 arrives ———————————————————— #
+    if seq == 0:
+        print("[RESET] Received frame_id 0 – resetting tracker and buffers")
+        tracker = ByteTrack()          # fresh state, track IDs restart
         with buffer_lock:
-            dets_buffer[seq] = (dets, time.time(), fid)
-            if next_seq is None:
-                next_seq = seq  # initialise cursor on the very first packet
+            dets_buffer.clear()
+            next_seq = 0               # start sequence anew at 0
+    # ———————————————————————————————————————————————— #
 
-        pump_buffer(prefix, len(str(seq)), userdata["out_topic"])
+    scale  = float(payload.get("scale", 1.0))
+    boxes  = payload.get("bboxes", [])
+    scores = payload.get("bboxe_scores", [])
+    dets = np.array(
+        [[x1/scale, y1/scale, x2/scale, y2/scale, s, 0]
+            for (x1, y1, x2, y2), s in zip(boxes, scores)],
+        dtype=np.float32
+    ) if boxes else np.zeros((0, 6), np.float32)
 
-    except Exception as e:
-        print(f"[MQTT] Bad message: {e}")
+    with buffer_lock:
+        dets_buffer[seq] = (dets, time.time(), fid)
+        if next_seq is None:
+            next_seq = seq  # initialise cursor on the very first packet
+
+    pump_buffer(prefix, len(str(seq)), userdata["out_topic"])
 
 
 # ──────────────────────────  BUFFER PUMP  ───────────────────────────── #
-
 def pump_buffer(prefix: str, width: int, out_topic: str):
     """Process frames strictly in order, optionally skipping holes."""
     global next_seq
@@ -128,7 +127,7 @@ def pump_buffer(prefix: str, width: int, out_topic: str):
                     print(f"[BUF] Skipping missing frame {next_seq}")
                     next_seq += 1
                     continue  # try again with incremented cursor
-                break  # cannot skip yet - leave for later
+                break  # cannot skip yet – leave for later
 
         if entry:
             process_tracking(fid, dets, out_topic)
@@ -143,13 +142,15 @@ def pump_buffer(prefix: str, width: int, out_topic: str):
             for s in stale:
                 dets_buffer.pop(s, None)
 
-
 # ───────────────────────  TRACKING & PUBLISHING  ────────────────────── #
-
 def process_tracking(frame_id: str, dets: np.ndarray, out_topic: str):
-    dummy_frame = np.zeros((1, 1, 3), np.uint8)  # ByteTrack requires an image
+    global video_writer, saved_frame_count
+
+    # Create a dummy frame for ByteTrack (we don’t actually have a real image here)
+    dummy_frame = np.zeros((1, 1, 3), np.uint8)
     tracklets = tracker.update(dets, dummy_frame)
 
+    # Publish over MQTT
     mqtt_client.publish(out_topic, json.dumps({
         "frame_id": frame_id,
         "track_ids":   [int(t[4]) for t in tracklets],
@@ -157,9 +158,54 @@ def process_tracking(frame_id: str, dets: np.ndarray, out_topic: str):
         "track_scores":[float(t[5]) for t in tracklets],
     }))
 
+    # --- Write first 100 frames to an MP4 ---
+    if saved_frame_count < MAX_FRAMES:
+        # Initialize VideoWriter on the first time we’re here
+        if video_writer is None:
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            video_writer = cv2.VideoWriter(
+                VIDEO_FILENAME, fourcc, FPS,
+                (IMAGE_WIDTH, IMAGE_HEIGHT)
+            )
+            if not video_writer.isOpened():
+                print("[VIDEO] ERROR: Could not open VideoWriter")
+                return
+
+        # Create a blank 1920×1080 image (black background)
+        frame = np.zeros((IMAGE_HEIGHT, IMAGE_WIDTH, 3), dtype=np.uint8)
+
+        # Draw each tracklet’s bounding box onto the blank frame
+        # tracklet format: [x1, y1, x2, y2, track_id, score]
+        for t in tracklets:
+            x1, y1, x2, y2, tid, score, _, _ = t
+            # Convert to ints and draw rectangle + ID text
+            pt1 = (int(x1), int(y1))
+            pt2 = (int(x2), int(y2))
+            track_id = int(t[4])
+            # Draw bounding box (green, thickness=2)
+            cv2.rectangle(frame, pt1, pt2, (0, 255, 0), 2)
+            # Put track ID above the box
+            cv2.putText(
+                frame,
+                f"ID:{track_id}",
+                (int(x1), int(y1) - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.0,
+                (0, 255, 0),
+                2,
+                lineType=cv2.LINE_AA
+            )
+
+        # Write this frame into the MP4
+        video_writer.write(frame)
+        saved_frame_count += 1
+
+        # If we just wrote the 100th frame, release the writer
+        if saved_frame_count == MAX_FRAMES:
+            video_writer.release()
+            print(f"[VIDEO] Saved {MAX_FRAMES} frames into '{VIDEO_FILENAME}'")
 
 # ───────────────────────────────  MAIN  ─────────────────────────────── #
-
 def main():
     global mqtt_client
 
@@ -182,8 +228,13 @@ def main():
     except KeyboardInterrupt:
         print("[MAIN] Ctrl-C - exiting")
     finally:
-        mqtt_client.loop_stop(); mqtt_client.disconnect()
-
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
+        # If we exited before writing 100 frames, still release writer
+        global video_writer
+        if video_writer is not None and video_writer.isOpened():
+            video_writer.release()
+            print(f"[VIDEO] Released VideoWriter (wrote {saved_frame_count} frames total)")
 
 if __name__ == "__main__":
     main()

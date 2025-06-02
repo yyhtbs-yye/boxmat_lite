@@ -4,6 +4,12 @@ FROM python:3.9-slim
 # Update and install necessary packages
 RUN apt update && apt install -y git
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      libgl1-mesa-glx \ 
+      libglib2.0-0
+
+
 # Set the parent working directory
 WORKDIR /app
 
