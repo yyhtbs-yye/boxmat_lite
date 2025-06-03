@@ -22,7 +22,7 @@ from boxmot import ByteTrack
 from boxmot.trackers.bytetrack.bytetrack import STrack
 
 # ────────────────────────────  PARAMETERS  ──────────────────────────── #
-SKIP_AHEAD    = 3      # how many later frames must arrive before we skip a hole
+SKIP_AHEAD    = 7      # how many later frames must arrive before we skip a hole
 FRAME_TIMEOUT = 2.0    # seconds before we drop a never-arrived frame
 FRAME_ID_RE   = re.compile(r"(\D*)(\d+)$")  # prefix + numeric suffix extractor
 # ---------------------------------------------------------------------- #
