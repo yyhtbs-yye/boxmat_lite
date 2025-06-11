@@ -24,7 +24,7 @@ dependencies = [
     "joblib==1.5.1",
     "lap==0.5.12",
     "loguru==0.7.3",
-    "numpy==1.24.4",
+    "numpy==2.0.2",
     "opencv-python==4.11.0.86",
     "paho-mqtt",
     "PyYAML==6.0.2",
