@@ -4,7 +4,6 @@ from typing import Tuple, Union
 
 import cv2
 import numpy as np
-# # import torch
 
 
 def xyxy2xywh(x):
@@ -12,9 +11,9 @@ def xyxy2xywh(x):
     Convert bounding box coordinates from (x1, y1, x2, y2) format to (x, y, width, height) format.
 
     Args:
-        x (np.ndarray) or (torch.Tensor): The input bounding box coordinates in (x1, y1, x2, y2) format.
+        x (np.ndarray): The input bounding box coordinates in (x1, y1, x2, y2) format.
     Returns:
-       y (np.ndarray) or (torch.Tensor): The bounding box coordinates in (x, y, width, height) format.
+       y (np.ndarray): The bounding box coordinates in (x, y, width, height) format.
     """
     y = np.copy(x)
     y[..., 0] = (x[..., 0] + x[..., 2]) / 2  # x center
@@ -31,9 +30,9 @@ def xywh2xyxy(x):
     is the bottom-right corner.
 
     Args:
-        x (np.ndarray) or (torch.Tensor): The input bounding box coordinates in (x, y, width, height) format.
+        x (np.ndarray): The input bounding box coordinates in (x, y, width, height) format.
     Returns:
-        y (np.ndarray) or (torch.Tensor): The bounding box coordinates in (x1, y1, x2, y2) format.
+        y (np.ndarray): The bounding box coordinates in (x1, y1, x2, y2) format.
     """
     y = np.copy(x)
     y[..., 0] = x[..., 0] - x[..., 2] / 2  # top left x
@@ -49,9 +48,9 @@ def xywh2tlwh(x):
     top-left corner and (w, h) is width and height.
 
     Args:
-        x (np.ndarray) or (torch.Tensor): The input bounding box coordinates in (x, y, width, height) format.
+        x (np.ndarray): The input bounding box coordinates in (x, y, width, height) format.
     Returns:
-        y (np.ndarray) or (torch.Tensor): The bounding box coordinates in (x1, y1, x2, y2) format.
+        y (np.ndarray): The bounding box coordinates in (x1, y1, x2, y2) format.
     """
     y = np.copy(x)
     y[..., 0] = x[..., 0] - x[..., 2] / 2.0  # xc --> t
@@ -105,9 +104,9 @@ def xyxy2xysr(x):
     Converts bounding box coordinates from (x1, y1, x2, y2) format to (x, y, s, r) format.
 
     Args:
-        bbox (np.ndarray) or (torch.Tensor): The input bounding box coordinates in (x1, y1, x2, y2) format.
+        bbox (np.ndarray): The input bounding box coordinates in (x1, y1, x2, y2) format.
     Returns:
-        z (np.ndarray) or (torch.Tensor): The bounding box coordinates in (x, y, s, r) format, where
+        z (np.ndarray): The bounding box coordinates in (x, y, s, r) format, where
                                           x, y is the center of the box,
                                           s is the scale (area), and
                                           r is the aspect ratio.

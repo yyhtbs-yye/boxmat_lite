@@ -18,7 +18,7 @@ from typing import Dict, Tuple, Optional
 
 import numpy as np
 import paho.mqtt.client as mqtt
-from boxmot import ByteTrack
+from boxmot.trackers.bytetrack.bytetrack import ByteTrack
 from boxmot.trackers.bytetrack.bytetrack import STrack
 
 # ────────────────────────────  PARAMETERS  ──────────────────────────── #

@@ -224,6 +224,7 @@ class OcSort(BaseTracker):
         use_byte: bool = False,
         Q_xy_scaling: float = 0.01,
         Q_s_scaling: float = 0.0001,
+        w=640, h=640,
     ):
         super().__init__(max_age=max_age, per_class=per_class, asso_func=asso_func)
         """
@@ -242,12 +243,13 @@ class OcSort(BaseTracker):
         self.Q_xy_scaling = Q_xy_scaling
         self.Q_s_scaling = Q_s_scaling
         KalmanBoxTracker.count = 0
+        self.w = w
+        self.h = h
 
     @BaseTracker.setup_decorator
     @BaseTracker.per_class_decorator
     def update(
-        self, dets: np.ndarray, img: np.ndarray, embs: np.ndarray = None
-    ) -> np.ndarray:
+        self, dets: np.ndarray) -> np.ndarray:
         """
         Params:
           dets - a numpy array of detections in the format [[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...]
@@ -257,10 +259,7 @@ class OcSort(BaseTracker):
         NOTE: The number of objects returned may differ from the number of detections provided.
         """
 
-        self.check_inputs(dets, img)
-
         self.frame_count += 1
-        h, w = img.shape[0:2]
 
         dets = np.hstack([dets, np.arange(len(dets)).reshape(-1, 1)])
         confs = dets[:, 4 + self.is_obb]
@@ -315,8 +314,7 @@ class OcSort(BaseTracker):
             velocities,
             k_observations,
             self.inertia,
-            w,
-            h,
+            self.w, self.h,
         )
         for m in matched:
             self.active_tracks[m[1]].update(

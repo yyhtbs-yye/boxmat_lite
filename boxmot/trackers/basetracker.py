@@ -65,7 +65,7 @@ class BaseTracker(ABC):
             print("self.max_obs", self.max_obs)
 
     @abstractmethod
-    def update(self, dets: np.ndarray, img: np.ndarray, embs: np.ndarray = None) -> np.ndarray:
+    def update(self, dets: np.ndarray) -> np.ndarray:
         """
         Abstract method to update the tracker with new detections for a new frame. This method
         should be implemented by subclasses.
@@ -116,8 +116,6 @@ class BaseTracker(ABC):
         def wrapper(self, *args, **kwargs):
             # Extract detections and image from args
             dets = args[0]
-            img = args[1] if len(args) > 1 else None
-
 
             # Unwrap `data` attribute if present
             if hasattr(dets, 'data'):
@@ -126,6 +124,8 @@ class BaseTracker(ABC):
             # Convert memoryview to numpy array if needed
             if isinstance(dets, memoryview):
                 dets = np.array(dets, dtype=np.float32)  # Adjust dtype if needed
+
+            img = None
 
             # First-time detection setup
             if not self._first_dets_processed and dets is not None:
@@ -147,7 +147,7 @@ class BaseTracker(ABC):
                 self._first_frame_processed = True
 
             # Call the original method with the unwrapped `dets`
-            return method(self, dets, img, *args[2:], **kwargs)
+            return method(self, dets, **kwargs)
 
         return wrapper
     
@@ -157,14 +157,14 @@ class BaseTracker(ABC):
         Decorator for the update method to handle per-class processing.
         """
 
-        def wrapper(self, dets: np.ndarray, img: np.ndarray, embs: np.ndarray = None):
+        def wrapper(self, dets: np.ndarray):
             # handle different types of inputs
             if dets is None or len(dets) == 0:
                 dets = np.empty((0, 6))
 
             if not self.per_class:
                 # Process all detections at once if per_class is False
-                return update_method(self, dets=dets, img=img, embs=embs)
+                return update_method(self, dets=dets)
             # else:
             # Initialize an array to store the tracks for each class
             per_class_tracks = []
@@ -186,7 +186,7 @@ class BaseTracker(ABC):
                 self.frame_count = frame_count
 
                 # Update detections using the decorated method
-                tracks = update_method(self, dets=class_dets, img=img, embs=class_embs)
+                tracks = update_method(self, dets=class_dets)
 
                 # Save the updated active tracks
                 self.per_class_active_tracks[cls_id] = self.active_tracks
@@ -199,31 +199,6 @@ class BaseTracker(ABC):
             return np.vstack(per_class_tracks) if per_class_tracks else np.empty((0, 8))
 
         return wrapper
-
-    def check_inputs(self, dets, img, embs=None):
-        assert isinstance(
-            dets, np.ndarray
-        ), f"Unsupported 'dets' input format '{type(dets)}', valid format is np.ndarray"
-        assert isinstance(
-            img, np.ndarray
-        ), f"Unsupported 'img_numpy' input format '{type(img)}', valid format is np.ndarray"
-        assert (
-            len(dets.shape) == 2
-        ), "Unsupported 'dets' dimensions, valid number of dimensions is two"
-
-        if embs is not None:
-            assert (
-                dets.shape[0] == embs.shape[0]
-            ), "Missmatch between detections and embeddings sizes"
-
-        if self.is_obb:
-            assert (
-                dets.shape[1] == 7
-            ), "Unsupported 'dets' 2nd dimension lenght, valid lenghts is 6 (cx,cy,w,h,angle,conf,cls)"
-        else:
-            assert (
-                dets.shape[1] == 6
-            ), "Unsupported 'dets' 2nd dimension lenght, valid lenghts is 6 (x1,y1,x2,y2,conf,cls)"
 
     def id_to_color(self, id: int, saturation: float = 0.75, value: float = 0.95) -> tuple:
         """
@@ -259,154 +234,3 @@ class BaseTracker(ABC):
         bgr = rgb[::-1]
 
         return bgr
-
-    def plot_box_on_img(
-        self,
-        img: np.ndarray,
-        box: tuple,
-        conf: float,
-        cls: int,
-        id: int,
-        thickness: int = 2,
-        fontscale: float = 0.5,
-    ) -> np.ndarray:
-        """
-        Draws a bounding box with ID, confidence, and class information on an image.
-
-        Parameters:
-        - img (np.ndarray): The image array to draw on.
-        - box (tuple): The bounding box coordinates as (x1, y1, x2, y2).
-        - conf (float): Confidence score of the detection.
-        - cls (int): Class ID of the detection.
-        - id (int): Unique identifier for the detection.
-        - thickness (int): The thickness of the bounding box.
-        - fontscale (float): The font scale for the text.
-
-        Returns:
-        - np.ndarray: The image array with the bounding box drawn on it.
-        """
-        if self.is_obb:
-
-            angle = box[4] * 180.0 / np.pi  # Convert radians to degrees
-            box_poly = ((box[0], box[1]), (box[2], box[3]), angle)
-            # print((width, height))
-            rotrec = cv.boxPoints(box_poly)
-            box_poly = np.int_(rotrec)  # Convert to integer
-
-            # Draw the rectangle on the image
-            img = cv.polylines(
-                img,
-                [box_poly],
-                isClosed=True,
-                color=self.id_to_color(id),
-                thickness=thickness,
-            )
-
-            img = cv.putText(
-                img,
-                f"id: {int(id)}, conf: {conf:.2f}, c: {int(cls)}, a: {box[4]:.2f}",
-                (int(box[0]), int(box[1]) - 10),
-                cv.FONT_HERSHEY_SIMPLEX,
-                fontscale,
-                self.id_to_color(id),
-                thickness,
-            )
-        else:
-
-            img = cv.rectangle(
-                img,
-                (int(box[0]), int(box[1])),
-                (int(box[2]), int(box[3])),
-                self.id_to_color(id),
-                thickness,
-            )
-            img = cv.putText(
-                img,
-                f"id: {int(id)}, conf: {conf:.2f}, c: {int(cls)}",
-                (int(box[0]), int(box[1]) - 10),
-                cv.FONT_HERSHEY_SIMPLEX,
-                fontscale,
-                self.id_to_color(id),
-                thickness,
-            )
-        return img
-
-    def plot_trackers_trajectories(
-        self, img: np.ndarray, observations: list, id: int
-    ) -> np.ndarray:
-        """
-        Draws the trajectories of tracked objects based on historical observations. Each point
-        in the trajectory is represented by a circle, with the thickness increasing for more
-        recent observations to visualize the path of movement.
-
-        Parameters:
-        - img (np.ndarray): The image array on which to draw the trajectories.
-        - observations (list): A list of bounding box coordinates representing the historical
-        observations of a tracked object. Each observation is in the format (x1, y1, x2, y2).
-        - id (int): The unique identifier of the tracked object for color consistency in visualization.
-
-        Returns:
-        - np.ndarray: The image array with the trajectories drawn on it.
-        """
-        for i, box in enumerate(observations):
-            trajectory_thickness = int(np.sqrt(float(i + 1)) * 1.2)
-            if self.is_obb:
-                img = cv.circle(
-                    img,
-                    (int(box[0]), int(box[1])),
-                    2,
-                    color=self.id_to_color(int(id)),
-                    thickness=trajectory_thickness,
-                )
-            else:
-
-                img = cv.circle(
-                    img,
-                    (int((box[0] + box[2]) / 2), int((box[1] + box[3]) / 2)),
-                    2,
-                    color=self.id_to_color(int(id)),
-                    thickness=trajectory_thickness,
-                )
-        return img
-
-    def plot_results(
-        self,
-        img: np.ndarray,
-        show_trajectories: bool,
-        thickness: int = 2,
-        fontscale: float = 0.5,
-    ) -> np.ndarray:
-        """
-        Visualizes the trajectories of all active tracks on the image. For each track,
-        it draws the latest bounding box and the path of movement if the history of
-        observations is longer than two. This helps in understanding the movement patterns
-        of each tracked object.
-
-        Parameters:
-        - img (np.ndarray): The image array on which to draw the trajectories and bounding boxes.
-        - show_trajectories (bool): Whether to show the trajectories.
-        - thickness (int): The thickness of the bounding box.
-        - fontscale (float): The font scale for the text.
-
-        Returns:
-        - np.ndarray: The image array with trajectories and bounding boxes of all active tracks.
-        """
-
-        if self.per_class_active_tracks is None:  # dict
-            active_tracks = self.active_tracks
-        else:
-            active_tracks = []
-            for k in self.per_class_active_tracks.keys():
-                active_tracks += self.per_class_active_tracks[k]
-
-        for a in active_tracks:
-            if not a.history_observations: continue
-            if len(a.history_observations) < 3: continue
-            box = a.history_observations[-1]
-            img = self.plot_box_on_img(img, box, a.conf, a.cls, a.id, thickness, fontscale)
-            if not show_trajectories: continue
-            img = self.plot_trackers_trajectories(img, a.history_observations, a.id)
-        return img
-
-    def reset(self):
-        pass

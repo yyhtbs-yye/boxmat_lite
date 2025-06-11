@@ -157,10 +157,7 @@ class ByteTrack(BaseTracker):
     @BaseTracker.setup_decorator
     @BaseTracker.per_class_decorator
     def update(
-        self, dets: np.ndarray, img: np.ndarray = None, embs: np.ndarray = None
-    ) -> np.ndarray:
-
-        self.check_inputs(dets, img)
+        self, dets: np.ndarray) -> np.ndarray:
 
         dets = np.hstack([dets, np.arange(len(dets)).reshape(-1, 1)])
         self.frame_count += 1
