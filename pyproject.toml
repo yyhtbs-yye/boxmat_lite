@@ -19,6 +19,21 @@ ignore = ["E731", "F405", "E402", "W504", "W605", "E741"]
 authors = [
     {name = "Mikel Broström"},
 ]
+requires-python = ">=3.9"
+dependencies = [
+    "joblib==1.5.1",
+    "lap==0.5.12",
+    "loguru==0.7.3",
+    "numpy==1.24.4",
+    "opencv-python==4.11.0.86",
+    "paho-mqtt",
+    "PyYAML==6.0.2",
+    "scikit-learn==1.6.1",
+    "scipy==1.13.1",
+    "threadpoolctl==3.6.0",
+    "tqdm",
+]
+
 license = {text = "AGPL-3.0-or-later"}
 
 name = "boxmot"
