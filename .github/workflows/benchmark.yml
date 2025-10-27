@@ -131,7 +131,7 @@ jobs:
         run: cat results/${{ matrix.tracker }}.txt
 
       - name: Upload Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: results-${{ github.run_id }}-${{ matrix.tracker }}
           path: results/${{ matrix.tracker }}.txt
